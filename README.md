@@ -6,17 +6,21 @@ This project implements PF-AAE, a framework to perform tracking of the 3D pose o
 
 This work builts on the AugmentedAutoencoder repository, available [here](https://github.com/DLR-RM/AugmentedAutoencoder).
 
+## :warning: Code availability disclaimer
+
+The actual implementation of PF-AAE is under NDA. This repository contains only the baseline code of the work, namely the AugmentedAutoencoder repository. The present readme is included to provide an overview of PF-AAE and its functionalities. Therefore, the reported demos cannot be reproduced and some files may not be available. Feel free to reach out for further details regarding the work :rocket:.
+
 ## Table of Contents
 
 - [Installation](#installation)
 - [Augmented Autoencoders](#augmented-autoencoders)
   - [AAE architecture](#aae-architecture)
-  - [AAE<sub>TL</sub> architecture](#aae<sub>TL</sub>-architecture)
+  - [AAE<sub>TL</sub> architecture](#aae-tl-architecture)
   - [Configuration file](#configuration-file)
   - [Training and embedding](#training-and-embedding)
 - [PF-AAE architecture](#pf-aae-architecture)
   - [PF-AAE update](#pf-aae-update)
-  - [AAE<sub>TL</sub> resampling](#aae<sub>TL</sub>-resampling)
+  - [AAE<sub>TL</sub> resampling](#aae-tl-resampling)
   - [Tracking experiments](#tracking-experiments)
 - [Run a demo](#run-a-demo)
 - [Datasets](#datasets)
@@ -73,6 +77,7 @@ The former is more discriminative, while the latter maps views of the object tha
 
 The image shows the AAE training procedure and the results obtained after 20000 training epochs.
 
+<a name="aae-tl-architecture"></a>
 ### AAE<sub>TL</sub> architecture
 
 ![AAE_TL architecture](docs/aae_tl_architecture.png)
@@ -149,6 +154,7 @@ The image shows one iteration of PF-AAE. The prediction step moves the particles
 
 The implemented noise models are `norm`, `unif-norm`, `predict`. The weighting function presents a parameter `gamma` that controls the discriminative behavior of the system. The resampling is performed when the effective number of particles is below a threshold `n_eff_threshold`. For further details, refer to [auto_pose/pf/pfilter_aae.py](auto_pose/pf/pfilter_aae.py).
 
+<a name="aae-tl-resampling"></a>
 ### AAE<sub>TL</sub> resampling
 
 ![AAE_TL resampling](docs/pf_aae_resampling.png)
