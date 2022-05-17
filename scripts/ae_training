@@ -1,0 +1,14 @@
+#!/bin/bash
+export AE_WORKSPACE_PATH=/path/to/workspace
+
+# training AAE, AAE_TL with mustard_bottle
+ae_train aae/mustard
+ae_train aae_tl/mustard
+
+# training AAE, AAE_TL with cracker_box
+ae_train aae/cracker
+ae_train aae_tl/cracker
+
+# training AAE, AAE_TL with gelatin_box
+ae_train aae/gelatin
+ae_train aae_tl/gelatin

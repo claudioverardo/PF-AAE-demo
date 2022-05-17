@@ -1,0 +1,14 @@
+#!/bin/bash
+export AE_WORKSPACE_PATH=/path/to/workspace
+
+# explore knns in AAE, AAE_TL latent spaces of mustard bottle
+ae_latent_exploration aae/mustard --knn 1000 --rot_ref 0 0 0
+ae_latent_exploration aae_tl/mustard -knn 1000 --rot_ref 0 0 0
+
+# explore knns in AAE, AAE_TL latent spaces of cracker box
+ae_latent_exploration aae/cracker --knn 1000 --rot_ref -90 -90 0
+ae_latent_exploration aae_tl/cracker --knn 1000 --rot_ref -90 -90 0
+
+# explore knns in AAE, AAE_TL latent spaces of gelatin box
+ae_latent_exploration aae/gelatin --knn 1000 --rot_ref 0 0 0
+ae_latent_exploration aae_tl/gelatin --knn 1000 --rot_ref 0 0 0

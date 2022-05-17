@@ -1,0 +1,14 @@
+#!/bin/bash
+export AE_WORKSPACE_PATH=/path/to/workspace
+
+# study cosine similarities in AAE, AAE_TL latent spaces of mustard bottle
+ae_latent_study aae/mustard --object_type mustard --study_type 0 1 --num_views 360
+ae_latent_study aae_tl/mustard --object_type mustard --study_type 0 1 --num_views 360
+
+# study cosine similarities in AAE, AAE_TL latent spaces of cracker box
+ae_latent_study aae/cracker --object_type cracker --study_type 0 1 --num_views 360
+ae_latent_study aae_tl/cracker --object_type cracker --study_type 0 1 2 --num_views 360
+
+# study cosine similarities in AAE, AAE_TL latent spaces of gelatin box
+ae_latent_study aae/gelatin --object_type gelatin --study_type 0 1 2 --num_views 360
+ae_latent_study aae_tl/gelatin --object_type gelatin --study_type 0 1 2 --num_views 360

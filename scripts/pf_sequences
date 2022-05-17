@@ -1,0 +1,28 @@
+#!/bin/bash
+export AE_WORKSPACE_PATH=/path/to/workspace
+
+# generate tracking sequences
+# for more details about the available sequences and their parameters cf. auto_pose/pf/pf_generate_sequences.py 
+
+# example of sequences
+
+pf_generate_sequences aae/cracker \
+    -params  "{'seq': 'cracker1', 'fps': 20, 'tlen': 10, 'vel': 30}"
+
+pf_generate_sequences aae/cracker \
+    -params "{'seq': 'poisson', 'fps': 20, 'tlen': 10, 'rate': 0.5, 'mu': 30, 'sigma': 30, 'seed': 500}"
+
+# example of more realistic sequences
+# (w/ interferences, background color, background image, occlusions)
+
+pf_generate_sequences aae/cracker \
+    -params  "{'seq': 'cracker1', 'fps': 20, 'tlen': 10, 'vel': 30}" \
+    -inters [1.5,[0,1,0],180,0.2] [5.0,[0,1,0],-90,0.2] \
+    -back_color [216,188,68] \
+    -occl "{'p': 0.5, 'p_drop': 0.2, 'size_percent': 0.05}"
+
+pf_generate_sequences aae/cracker \
+    -params "{'seq': 'poisson', 'fps': 20, 'tlen': 10, 'rate': 0.5, 'mu': 30, 'sigma': 30, 'seed': 500}" \
+    -inter [4.2,[0,0,1],180,0] \
+    -back_img path/to/background/image \
+    -occl "{'p': 0.7, 'p_drop': 0.4, 'size_percent': 0.03}"

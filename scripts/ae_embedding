@@ -1,0 +1,14 @@
+#!/bin/bash
+export AE_WORKSPACE_PATH=/path/to/workspace
+
+# embedding mustard_bottle
+ae_embed aae/mustard
+ae_embed aae_tl/mustard
+
+# embedding cracker_box
+ae_embed aae/cracker
+ae_embed aae_tl/cracker
+
+# embedding gelatin_box
+ae_embed aae/gelatin
+ae_embed aae_tl/gelatin

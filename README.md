@@ -1,291 +1,334 @@
-## Augmented Autoencoders (w/ textures using Pyrender)
+# PF-AAE: a particle filtering framework for 3D object pose tracking with RGB input
 
-### Implicit 3D Orientation Learning for 6D Object Detection from RGB Images   
-Martin Sundermeyer, Zoltan-Csaba Marton, Maximilian Durner, Manuel Brucker, Rudolph Triebel  
-Best Paper Award, ECCV 2018.    
+![PF-AAE overview](docs/pf_aae_overview.gif)
 
-[paper](https://arxiv.org/pdf/1902.01275), [supplement](https://static-content.springer.com/esm/chp%3A10.1007%2F978-3-030-01231-1_43/MediaObjects/474211_1_En_43_MOESM1_ESM.pdf), [oral](https://www.youtube.com/watch?v=jgb2eNNlPq4)
+This project implements PF-AAE, a framework to perform tracking of the 3D pose of an object via particle filtering (PF) and augmented autoencoders (AAE). The filter iteratively estimates the posterior of the rotation matrix <em>R<sub>t</sub></em> given the RGB input <em>y<sub>1:t</sub></em>. The prediction step deploys a noise model in SO(3), while the correction step deploys a measurement model based on the AAE architecture. A novel resampling strategy called AAE<sub>TL</sub> resampling suggests an improvement of the tracking performance when the object undergoes abrupt changes of the pose. It relies on AAE<sub>TL</sub>, an augmented autoencoder trained with texture-less reconstruction objectives. The tracking procedure is carried out offline.
 
-### Citation
-If you find Augmented Autoencoders useful for your research, please consider citing:  
-```
-@InProceedings{Sundermeyer_2018_ECCV,
-author = {Sundermeyer, Martin and Marton, Zoltan-Csaba and Durner, Maximilian and Brucker, Manuel and Triebel, Rudolph},
-title = {Implicit 3D Orientation Learning for 6D Object Detection from RGB Images},
-booktitle = {The European Conference on Computer Vision (ECCV)},
-month = {September},
-year = {2018}
-}
-```
+This work builts on the AugmentedAutoencoder repository, available [here](https://github.com/DLR-RM/AugmentedAutoencoder).
 
-### Multi-path Learning for Object Pose Estimation Across Domains
-Martin Sundermeyer, Maximilian Durner, En Yen Puang, Zoltan-Csaba Marton, Narunas Vaskevicius, Kai O. Arras, Rudolph Triebel  
-CVPR 2020  
-The code of this work can be found [here](https://github.com/DLR-RM/AugmentedAutoencoder/tree/multipath)
+## Table of Contents
 
-## Overview
+- [Installation](#installation)
+- [Augmented Autoencoders](#augmented-autoencoders)
+  - [AAE architecture](#aae-architecture)
+  - [AAE<sub>TL</sub> architecture](#aae<sub>TL</sub>-architecture)
+  - [Configuration file](#configuration-file)
+  - [Training and embedding](#training-and-embedding)
+- [PF-AAE architecture](#pf-aae-architecture)
+  - [PF-AAE update](#pf-aae-update)
+  - [AAE<sub>TL</sub> resampling](#aae<sub>TL</sub>-resampling)
+  - [Tracking experiments](#tracking-experiments)
+- [Run a demo](#run-a-demo)
+- [Datasets](#datasets)
+- [Code structure](#code-structure)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
+- [References](#references)
 
-We propose a real-time RGB-based pipeline for object detection and 6D pose estimation. Our novel 3D orientation estimation is based on a variant of the Denoising Autoencoder that is trained on simulated views of a 3D model using Domain Randomization. This so-called Augmented Autoencoder has several advantages over existing methods: It does not require real, pose-annotated training data, generalizes to various test sensors and inherently handles object and view symmetries.  
 
-<p align="center">
-<img src='docs/pipeline_with_scene_vertical_ext.jpeg' width='600'>
-<p>
+## Installation
 
-1.) Train the Augmented Autoencoder(s) using only a 3D model to predict 3D Object Orientations from RGB image crops \
-2.) For full RGB-based 6D pose estimation, also train a 2D Object Detector (e.g. https://github.com/fizyr/keras-retinanet) \
-3.) Optionally, use our standard depth-based ICP to refine the 6D Pose
-
-## Requirements: Hardware
-### For Training
-NVIDIA GPU with > 4GB memory (or adjust the batch size)  
-RAM > 8GB  
-Duration depending on Configuration and Hardware: e.g. ~3h per Object on a NVIDIA P100 GPU
-
-## Requirements: Software
-
-Tested w/ Python 3 + CUDA 10.0 + Tensorflow 1.15.
-
-In order to install dependencies please run
-
-```
+1. Install the code dependencies
+```bash
 pip install -r requirements.txt
 ```
 
-### Rendering
-We use Pyrender + EGL for object rendering. Pyrender is listed within the `requirements.txt` file and gets installed using the command above, however you might want to read [this](https://pyrender.readthedocs.io/en/latest/install/index.html) for more information on EGL support.
-
-Notes:
-- please make sure that the mesh vertices are expressed in meters
-- meshes with textures are supported
-- headless rendering is supported
-
-## Preparatory Steps
-
-*1. Pip installation*
+2. Pip installation of the code
 ```bash
 pip install --user .
 ```
 
-*2. Set Workspace path, consider to put this into your bash profile, will always be required*
+3. Create the workspace (folder to collect AAE, AAE<sub>TL</sub>, PF-AAE data) 
 ```bash
-export AE_WORKSPACE_PATH=/path/to/autoencoder_ws  
-```
-
-*3. Create Workspace, Init Workspace (if installed locally, make sure .local/bin/ is in your PATH)*
-```bash
+export AE_WORKSPACE_PATH=/path/to/aae_workspace
 mkdir $AE_WORKSPACE_PATH
-cd $AE_WORKSPACE_PATH
-ae_init_workspace
+ae_init_workspace 
 ```
 
-## Train an Augmented Autoencoder
+4. Check the content of the workspace
+```bash
+└── aae_workspace
+    ├── cfg
+    │   └── train_template_aae.cfg
+    │   └── train_template_aae_tl.cfg
+    ├── cfg_eval
+    ├── experiments
+    └── tmp_datasets
+```
 
-*1. Create the training config file. Insert the paths to your 3D model and background images.*
+## Augmented Autoencoders
+
+Augmented autoencoders (AAEs) are convolutional autoencoders trained to reconstruct the view of an object from an augmented version of it fed as input. Thus, they deliver an implicit representation of rotations in their latent space. For further details, refer to the [original readme](README_AAE.md) of the AugmentedAutoencoder repository.
+
+In this framework, it is possible to train two kinds of AAEs:
+
+- AAE architecture: augmented autoencoder with textured reconstruction.
+- AAE<sub>TL</sub> architecture: augmented autoencoder with texture-less reconstruction.
+
+The former is more discriminative, while the latter maps views of the object that are symmetric without textures nearby in the latent space.
+
+### AAE architecture
+
+![AAE architecture](docs/aae_architecture.png)
+
+The image shows the AAE training procedure and the results obtained after 20000 training epochs.
+
+### AAE<sub>TL</sub> architecture
+
+![AAE_TL architecture](docs/aae_tl_architecture.png)
+
+The image shows the AAE<sub>TL</sub> training procedure and the results obtained after 20000 training epochs.
+
+### Configuration file
+
+The AAEs architectures are defined via a configuration file .cfg. Examples can be found in [auto_pose/ae/cfg](auto_pose/ae/cfg) or in the workspace, after its initialization.
+
+In the configuration file must be defined the path to the 3D model of the object (MODEL_PATH). Moreover, it is required the path to a folder containing the images for the augmentation of the training input (BACKGROUND_IMAGES_GLOB). The datasets used for 3D models and background images are reported in section [Datasets](#datasets).
+
+```bash
+[Paths]
+MODEL_PATH: /path/to/my_3d_model.ply
+BACKGROUND_IMAGES_GLOB: /path/to/background/images/*.jpg
+```
+
+To enable the training of an AAE or an AAE<sub>TL</sub> architecture the TLESS_TARGET flag must be set as follow:
+
+```bash
+[Network]
+TLESS_TARGET: False # for AAE training
+TLESS_TARGET: True  # for AAE_TL training
+```
+
+For further details about the configuration files, refer to the [original readme](README_AAE.md) of the AugmentedAutoencoder repository.
+
+
+### Training and embedding
+
+1. Copy your configuration file `my_autoencoder.cfg` in the workspace
+
 ```bash
 mkdir $AE_WORKSPACE_PATH/cfg/exp_group
-cp $AE_WORKSPACE_PATH/cfg/train_template.cfg $AE_WORKSPACE_PATH/cfg/exp_group/my_autoencoder.cfg
-gedit $AE_WORKSPACE_PATH/cfg/exp_group/my_autoencoder.cfg
+cp path/to/your/my_autoencoder.cfg $AE_WORKSPACE_PATH/cfg/exp_group/my_autoencoder.cfg
 ```
 
-*2. Generate and check training data. The object views should be strongly augmented but identifiable.*
-
-(Press *ESC* to close the window.)
-```bash
-ae_train exp_group/my_autoencoder -d
-```
-This command does not start training and should be run on a PC with a display connected.  
-
-Output:
-![](docs/training_images_29999.png)
-
-*3. Train the model*
-(See the [Headless Rendering](#headless-rendering) section if you want to train directly on a server without display)
+2. Train the architecture
 
 ```bash
 ae_train exp_group/my_autoencoder
 ```
 
-```bash
-$AE_WORKSPACE_PATH/experiments/exp_group/my_autoencoder/train_figures/training_images_29999.png  
-```
-Middle part should show reconstructions of the input object (if all black, set higher bootstrap_ratio / auxilliary_mask in training config)  
-
-*4. Create the embedding*
+3. Create the embedding (i.e., the codebook)
 ```bash
 ae_embed exp_group/my_autoencoder
 ```
 
-## Testing
-
-### Augmented Autoencoder only
-
-have a look at /auto_pose/test/   
-
-*Feed one or more object crops from disk into AAE and predict 3D Orientation*
+4. Check the content of the workspace
 ```bash
-python aae_image.py exp_group/my_autoencoder -f /path/to/image/file/or/folder
+└── aae_workspace
+    ├── cfg
+    │   └── exp_group
+    │       └── my_autoencoder.cfg
+    └── experiments
+        └── exp_group
+            └── my_autoencoder
+                └── checkpoints
+                └── train_figures
 ```
 
-*The same with a webcam input stream*
-```bash
-python aae_webcam.py exp_group/my_autoencoder
-```
+## PF-AAE architecture
 
-### Multi-object RGB-based 6D Object Detection from a Webcam stream
+PF-AAE is a particle filter that performs the tracking of the 3D pose of an object from a sequence of images. It iteratively estimates the posterior of the object rotation matrix <em>R<sub>t</sub></em> given the RGB input, or observations, <em>y<sub>1:t</sub></em>.
 
-*Option 1: Train a RetinaNet Model from https://github.com/fizyr/keras-retinanet*
+This framework builts on the implementation of a particle filter offered by the [pfilter](https://github.com/johnhw/pfilter) repository.
 
-adapt $AE_WORKSPACE_PATH/eval_cfg/aae_retina_webcam.cfg
+### PF-AAE update
 
-```bash
-python auto_pose/test/aae_retina_webcam_pose.py -test_config aae_retina_webcam.cfg -vis
-```
+![PF-AAE schematic](docs/pf_aae_schematic.png)
 
-*Option 2: Using the Google Detection API with Fixes*
+The image shows one iteration of PF-AAE. The prediction step moves the particles exploiting a noise model in SO(3) as state evolution model. The correction step builds the measurement model with an AAE encoder and its latent space. Namely, the rendered particles are compared with the observation via the cosine similarity. Then, a Gaussian kernel is applied as weighting function (not shown). As resampling procedure, it is possible to combine systematic resampling and AAE<sub>TL</sub> resampling (cf. the subsection [AAE<sub>TL</sub> resampling](#aae<sub>TL</sub>-resampling)).
 
-Train a 2D detector following https://github.com/naisy/train_ssd_mobilenet  
-adapt /auto_pose/test/googledet_utils/googledet_config.yml  
+The implemented noise models are `norm`, `unif-norm`, `predict`. The weighting function presents a parameter `gamma` that controls the discriminative behavior of the system. The resampling is performed when the effective number of particles is below a threshold `n_eff_threshold`. For further details, refer to [auto_pose/pf/pfilter_aae.py](auto_pose/pf/pfilter_aae.py).
 
-```bash
-python auto_pose/test/aae_googledet_webcam_multi.py exp_group/my_autoencoder exp_group/my_autoencoder2 exp_group/my_autoencoder3
-```
+### AAE<sub>TL</sub> resampling
 
+![AAE_TL resampling](docs/pf_aae_resampling.png)
 
-## Evaluate a model
+With an AAE<sub>TL</sub> architecture trained on the same object of the AAE architecture employed in the filter, it is possible to use the AAE<sub>TL</sub> resampling. At each iteration, the portion `aae_resampling_proportion` of particles with the lowest weights is substituted with particles uniformly sampled from the `aae_resampling_knn` nearest neighbors of the MAP estimate in the AAE<sub>TL</sub> codebook. The other particles are resampled according to the systematic resampling procedure.
 
-*For the evaluation you will also need*
-https://github.com/thodan/sixd_toolkit + our extensions, see sixd_toolkit_extension/help.txt  
+The codename of this resampling procedure is `aae-tl`. For comparison, also the `unif` resampling is implemented. It performs the sampling procedure uniformly in SO(3) instead of the codebook of AAE<sub>TL</sub>.
 
-*Create the evaluation config file*
-```bash
-mkdir $AE_WORKSPACE_PATH/cfg_eval/eval_group
-cp $AE_WORKSPACE_PATH/cfg_eval/eval_template.cfg $AE_WORKSPACE_PATH/cfg_eval/eval_group/eval_my_autoencoder.cfg
-gedit $AE_WORKSPACE_PATH/cfg_eval/eval_group/eval_my_autoencoder.cfg
-```
+### Tracking experiments
 
-### Evaluate and visualize 6D pose estimation of AAE with ground truth bounding boxes
-
-Set estimate_bbs=False in the evaluation config  
+1. Generate a sequence of views of the object
 
 ```bash
-ae_eval exp_group/my_autoencoder name_of_evaluation --eval_cfg eval_group/eval_my_autoencoder.cfg
-e.g.
-ae_eval tless_nobn/obj5 eval_name --eval_cfg tless/5.cfg
+pf_generate_sequences exp_group/my_autoencoder \
+    # sequence parameters (see below)
 ```
 
-### Evaluate 6D Object Detection with a 2D Object Detector
+For the available parameters, refer to [auto_pose/pf/pf_generate_sequences.py](auto_pose/pf/pf_generate_sequences.py) and the section [Run a Demo](#run-a-demo).
 
-Set estimate_bbs=True in the evaluation config  
-
-*Generate a training dataset for T-Less using detection_utils/generate_sixd_train.py*
-```bash
-python detection_utils/generate_sixd_train.py
-```
-
-Train https://github.com/fizyr/keras-retinanet or https://github.com/balancap/SSD-Tensorflow
+2. Start tracking of the sequence
 
 ```bash
-ae_eval exp_group/my_autoencoder name_of_evaluation --eval_cfg eval_group/eval_my_autoencoder.cfg
-e.g.
-ae_eval tless_nobn/obj5 eval_name --eval_cfg tless/5.cfg
+pf_tracking_sequences -aae exp_group/my_autoencoder \
+    # tracking parameters (see below)
 ```
 
+For the available parameters, refer to [auto_pose/pf/pf_tracking_sequences.py](auto_pose/pf/pf_tracking_sequences.py), [auto_pose/pf/pfilter_aae.py](auto_pose/pf/pfilter_aae.py), and the section [Run a Demo](#run-a-demo).
 
-# Config file parameters
-```yaml
+3. Check the results in the workspace
+
+```bash
+└── aae_workspace
+    ├── experiments
+    │   └── exp_group
+    │       └── my_autoencoder
+    │           ├── filtering
+    │           │   └── sequence_name
+    │           │       └── pf_tracking_name
+    │           └── ...
+    └── ...
+```
+
+In place of `sequence_name` and `tracking_name` will appear two strings that respectively identify the generated sequence and the tracking experiments, along with their parameters.
+
+
+## Run a demo
+
+1. Edit the first two lines of [demo/cfg/aae/cracker.cfg](demo/cfg/aae/cracker.cfg) and [demo/cfg/aae/cracker.cfg](demo/cfg/aae_tl/cracker.cfg). MODEL_PATH must be the path to the YCB cracker_box model, available in [demo/obj_000002.ply](demo/obj_000002.ply). BACKGROUND_IMAGES_GLOB must be the path to the Pascal VOC2012 dataset, available [here](http://host.robots.ox.ac.uk/pascal/VOC/voc2012/).
+
+```bash
 [Paths]
-# Path to the model file. All formats supported by assimp should work. Tested with ply files.
-MODEL_PATH: /path/to/my_3d_model.ply
-# Path to some background image folder. Should contain a * as a placeholder for the image name.
-BACKGROUND_IMAGES_GLOB: /path/to/VOCdevkit/VOC2012/JPEGImages/*.jpg
+MODEL_PATH: /path/to/obj_000002.ply
+BACKGROUND_IMAGES_GLOB: /path/to/voc12/VOCdevkit/VOC2012/JPEGImages/*.jpg
+```
 
-[Dataset]
-# Height of the AE input layer
-H: 128
-# Width of the AE input layer
-W: 128
-# Channels of the AE input layer (default BGR)
-C: 3
-# Distance from Camera to the object in mm for synthetic training images
-RADIUS: 700
-# Dimensions of the renderered image, it will be cropped and rescaled to H, W later.
-RENDER_DIMS: (720, 540)
-# Camera matrix used for rendering and optionally for estimating depth from RGB
-K: [1075.65, 0, 720/2, 0, 1073.90, 540/2, 0, 0, 1]
-# Vertex scale. Vertices need to be scaled to mm
-VERTEX_SCALE: 1
-# Antialiasing factor used for rendering
-ANTIALIASING: 8
-# Padding rendered object images and potentially bounding box detections 
-PAD_FACTOR: 1.2
-# Near plane
-CLIP_NEAR: 10
-# Far plane
-CLIP_FAR: 10000
-# Number of training images rendered uniformly at random from SO(3)
-NOOF_TRAINING_IMGS: 10000
-# Number of background images that simulate clutter
-NOOF_BG_IMGS: 10000
+2. Copy the configuration files in [demo/cfg](demo/cfg) in the workspace
 
-[Augmentation]
-# Using real object masks for occlusion (not really necessary)
-REALISTIC_OCCLUSION: False
-# Maximum relative translational offset of input views, sampled uniformly  
-MAX_REL_OFFSET: 0.20
-# Random augmentations at random strengths from imgaug library
-CODE: Sequential([
-    #Sometimes(0.5, PerspectiveTransform(0.05)),
-    #Sometimes(0.5, CropAndPad(percent=(-0.05, 0.1))),
-    Sometimes(0.5, Affine(scale=(1.0, 1.2))),
-    Sometimes(0.5, CoarseDropout( p=0.2, size_percent=0.05) ),
-    Sometimes(0.5, GaussianBlur(1.2*np.random.rand())),
-    Sometimes(0.5, Add((-25, 25), per_channel=0.3)),
-    Sometimes(0.3, Invert(0.2, per_channel=True)),
-    Sometimes(0.5, Multiply((0.6, 1.4), per_channel=0.5)),
-    Sometimes(0.5, Multiply((0.6, 1.4))),
-    Sometimes(0.5, ContrastNormalization((0.5, 2.2), per_channel=0.3))
-    ], random_order=False)
+```bash
+cp -r demo/cfg $AE_WORKSPACE_PATH
+```
 
-[Embedding]
-# for every rotation save rendered bounding box diagonal for projective distance estimation
-EMBED_BB: True
-# minimum number of equidistant views rendered from a view-sphere
-MIN_N_VIEWS: 2562
-# for each view generate a number of in-plane rotations to cover full SO(3)
-NUM_CYCLO: 36
+3. Training and embedding of the AAE architecture for the YCB cracker_box
 
-[Network]
-# additionally reconstruct segmentation mask, helps when AAE decodes pure blackness
-AUXILIARY_MASK: False
-# Variational Autoencoder, factor in front of KL-Divergence loss
-VARIATIONAL: 0
-# Reconstruction error metric
-LOSS: L2
-# Only evaluate 1/BOOTSTRAP_RATIO of the pixels with highest errors, produces sharper edges
-BOOTSTRAP_RATIO: 4
-# regularize norm of latent variables
-NORM_REGULARIZE: 0
-# size of the latent space
-LATENT_SPACE_SIZE: 128
-# number of filters in every Conv layer (decoder mirrored)
-NUM_FILTER: [128, 256, 512, 512]
-# stride for encoder layers, nearest neighbor upsampling for decoder layers
-STRIDES: [2, 2, 2, 2]
-# filter size encoder
-KERNEL_SIZE_ENCODER: 5
-# filter size decoder
-KERNEL_SIZE_DECODER: 5
+```bash
+ae_train aae/cracker # NB: ~8 hours with a K40 GPU
+ae_embed aae/cracker
+```
 
+4. Training and embedding of the AAE<sub>TL</sub> architecture for the YCB cracker_box
 
-[Training]
-OPTIMIZER: Adam
-NUM_ITER: 30000
-BATCH_SIZE: 64
-LEARNING_RATE: 1e-4
-SAVE_INTERVAL: 5000
+```bash
+ae_train aae_tl/cracker # NB: ~8 hours with a K40 GPU
+ae_embed aae_tl/cracker
+```
 
-[Queue]
-# number of threads for producing augmented training data (online)
-NUM_THREADS: 10
-# preprocessing queue size in number of batches
-QUEUE_SIZE: 50
+5. Generate a sequence with a backflip of the object at 4.2 seconds. Then, run 3 tracking experiments on it: one with AAE<sub>TL</sub> resampling, one with uniform resampling, and one without AAE<sub>TL</sub> and uniform resampling. 
+
+```bash
+cd demo
+./pf_aae_example.sh
+```
+
+6. Results in `$AE_WORKSPACE_PATH/experiments/aae/cracker/filtering`
+
+The following animation shows from left to right:
+
+- the input sequence (generated)
+- the output of the PF-AAE w/ AAE<sub>TL</sub> resampling (rendered)
+- the output of the PF-AAE w/ uniform resampling (rendered)
+- the output of the PF-AAE w/o AAE<sub>TL</sub> and uniform resampling (rendered)
+
+![PF-AAE demo results video](demo/output.gif)
+
+The following figure compares the ground truth 3D poses of the object in the input sequence with the ones estimated by the 3 tracking experiments. Poses are expressed with their axis-angle representations.
+
+![PF-AAE demo results error](demo/output_error.png)
+
+The following figures show the (rendered) particles of the filters when the backflip occurs. For each particle:
+
+- bottom left: the cosine similarity with the observation y<sub>t</sub>
+- bottom right: the weight of the particle
+
+The meanings of the colors of the borders are the following:
+
+- black: particles obtained with the prediction step
+- red: particles obtained with AAE<sub>TL</sub>  or uniform resampling
+- blue: MAP estimate that comes from a particle obtained with the prediction step
+- green: MAP estimate that comes from a particle obtained with AAE<sub>TL</sub> or uniform resampling
+
+Particles of PF-AAE w/ AAE<sub>TL</sub> resampling when the backflip occurs (4.2 s):
+
+![PF-AAE demo results error](demo/output_particles_aaetl_0084.png)
+
+Particles of PF-AAE w/ uniform resampling when the backflip occurs (4.2 s):
+
+![PF-AAE demo results error](demo/output_particles_unif_0084.png)
+
+## Datasets
+
+This work has been tested with the following two datasets:
+
+- [YCB_Video](https://rse-lab.cs.washington.edu/projects/posecnn/): used for the 3D models of the objects being tracked.
+- [Pascal VOC 2012](http://host.robots.ox.ac.uk/pascal/VOC/voc2012/): used for the augmentation of the input images during training.
+
+We use [Pyrender](https://github.com/mmatl/pyrender) + EGL for object rendering.  Differently from the original AugmentedAutoencoder code, this renderer permits to use 3D models with textures. Please, make sure that the mesh vertices are expressed in meters before launching the training procedure.
+
+## Code structure
+
+The main changes from the original AugmentedAutoencoder code are in the following files:
+
+```bash
+├── auto_pose
+│   ├── ae
+│   │   ├── ae_latent_exploration.py
+│   │   ├── ae_latent_study.py
+│   │   ├── cfg
+│   │   │   └── train_template_aae.cfg
+│   │   │   └── train_template_aae_tl.cfg
+│   │   └── ...
+│   ├── pf
+│   │   ├── pf_generate_sequences.py
+│   │   ├── pfilter_aae.py
+│   │   ├── pfilter.py
+│   │   ├── pf_tracking_sequences.py
+│   │   └── utils.py
+│   ├── renderer
+│   │   └── renderer.py
+│   └── ...
+├── scripts
+│   ├── ae_embedding
+│   ├── ae_latent_exploration
+│   ├── ae_latent_study
+│   ├── ae_training
+│   ├── pf_sequences
+│   └── pf_tracking
+├── setup.py
+└── ...
+```
+
+We provide hereafter a brief overview of the code structure:
+
+- [auto_pose/ae](auto_pose/ae) contains some new code to train and study the AAE<sub>TL</sub> architecture, along with the original AAE.
+- [auto_pose/pf](auto_pose/pf) contains the main code that implements the PF-AAE architecture.
+- [auto_pose/renderer](auto_pose/renderer) contains the interface with Pyrender, which supports textured models.
+- [scripts](scripts) contains some examples of shell scripts to configure and use the PF-AAE, AAE, AAE<sub>TL</sub> architectures.
+
+We refer to the code documentation for more details.
+
+## Acknowledgments
+
+This project has been developed during my internship at the Istituto Italiano di Tecnologia (IIT), within the Humanoid Sensing and Perception group (HSP). I am sincerely thankful to my supervisors for all their support and suggestions to carry out the work.
+
+## License 
+
+This code is licensed under MIT License, see the [LICENSE](./LICENSE) file for more details.
+
+## References
+
+[1] Martin Sundermeyer, Zoltan-Csaba Marton, Maximilian Durner, Manuel Brucker, and Rudolph Triebel, Implicit 3D Orientation Learning for 6D Object Detection from RGB Images, The European Conference on Computer Vision (ECCV), September 2018.
+
+[2] Xinke Deng, Arsalan Mousavian, Yu Xiang, Fei Xia, Timothy Bretl, and Dieter Fox, PoseRBPF: A Rao–Blackwellized Particle Filter for 6-D Object Pose Tracking, 2019.
+
+[3] Simo Särkkä, Bayesian Filtering and Smoothing. Cambridge University Press, USA. 2013.
